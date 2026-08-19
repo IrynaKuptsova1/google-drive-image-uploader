@@ -1,0 +1,33 @@
+{
+  "name": "google-drive-image-uploader",
+  "version": "1.0.0",
+  "description": "CLI application for uploading images to Google Drive",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run start:node",
+    "start:node": "npm run build && node dist/index.js",
+    "start:bun": "bun run src/index.ts",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^5.3.0",
+    "dotenv": "^16.3.1",
+    "form-data": "^4.0.0",
+    "fs-extra": "^11.1.1",
+    "googleapis": "^126.0.0",
+    "inquirer": "^9.2.12",
+    "open": "^9.1.0"
+  },
+  "devDependencies": {
+    "@types/chalk": "^0.4.31",
+    "@types/dotenv": "^6.1.1",
+    "@types/fs-extra": "^11.0.4",
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^25.8.0",
+    "@types/open": "^6.1.0",
+    "typescript": "^6.0.3"
+  }
+}
