@@ -6,9 +6,7 @@ Example:
 
 ```text
 Image path: ./photos/sunset.png
-File name: sunset.png
-? Create a short link? No
-
+File name: sunset.pn
 Google Drive authentication
 File uploaded successfully!
 Link: https://drive.google.com/file/d/1a2b3c4d5e/view
