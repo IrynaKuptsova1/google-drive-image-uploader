@@ -4,8 +4,11 @@ import fs from "fs-extra";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import { uploadToGoogleDrive, authenticate } from "./google-drive.js";
-//import { createTinyUrl } from "./tinyurl.js";
+import {
+  uploadToGoogleDrive,
+  authenticate,
+  createTinyUrl,
+} from "./google-drive.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -13,19 +16,12 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-interface FileInfo {
-  id?: string;
-  name?: string;
-  size?: number;
-  webViewLink?: string;
-}
-
 async function promptForImagePath(): Promise<string> {
   const { imagePath } = await inquirer.prompt([
     {
       type: "input",
       name: "imagePath",
-      message: "Image path:",
+      message: "Image path (drag & drop here):",
       validate: async (input: string) => {
         const cleanPath = input.trim().replace(/^['"]|['"]$/g, "");
         if (!cleanPath) return "Please provide the image path";
@@ -38,7 +34,8 @@ async function promptForImagePath(): Promise<string> {
 
         const ext = path.extname(cleanPath).toLowerCase();
         const imageExts = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"];
-        if (!imageExts.includes(ext)) return "The file must be an image";
+        if (!imageExts.includes(ext))
+          return "The file must be an image (.jpg, .jpeg, .png, .gif, .bmp, .webp)";
 
         return true;
       },
@@ -56,8 +53,8 @@ async function promptForRename(originalPath: string): Promise<string> {
       name: "action",
       message: `File name: ${chalk.green(originalName)}`,
       choices: [
-        { name: "Rename", value: "rename" },
         { name: "Keep as is", value: "keep" },
+        { name: "Rename", value: "rename" },
       ],
     },
   ]);
@@ -98,30 +95,31 @@ async function promptForShortLink(): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
+  let tempFilePath = "";
   try {
     const imagePath = await promptForImagePath();
     console.log(chalk.gray(`\nSelected: ${imagePath}\n`));
 
     const finalFileName = await promptForRename(imagePath);
     if (finalFileName !== path.basename(imagePath)) {
-      console.log(chalk.gray(`\nNew name: ${finalFileName}\n`));
+      console.log(chalk.gray(`New name: ${finalFileName}\n`));
     }
 
     const createShortLink = await promptForShortLink();
 
-    console.log(chalk.cyan("\nGoogle Drive authentication"));
-
+    console.log(chalk.cyan("\nGoogle Drive authentication..."));
     const auth = await authenticate();
-    console.log(chalk.green("Authentication successful\n"));
+    console.log(chalk.green("Authentication successful!\n"));
 
-    console.log(chalk.cyan("Uploading file"));
+    console.log(chalk.cyan("Uploading file..."));
 
     let fileToUpload = imagePath;
+
     if (finalFileName !== path.basename(imagePath)) {
-      const tempPath = path.join(__dirname, "temp", finalFileName);
-      await fs.ensureDir(path.join(__dirname, "temp"));
-      await fs.copy(imagePath, tempPath);
-      fileToUpload = tempPath;
+      tempFilePath = path.join(__dirname, "temp", finalFileName);
+      await fs.ensureDir(path.dirname(tempFilePath));
+      await fs.copy(imagePath, tempFilePath);
+      fileToUpload = tempFilePath;
     }
 
     const fileInfo = await uploadToGoogleDrive(
@@ -129,12 +127,9 @@ async function main(): Promise<void> {
       fileToUpload,
       finalFileName,
     );
+
     if (!fileInfo.webViewLink) {
       throw new Error("Uploaded file did not return a webViewLink.");
-    }
-
-    if (fileToUpload !== imagePath) {
-      await fs.remove(fileToUpload);
     }
 
     console.log(chalk.green("File uploaded successfully!\n"));
@@ -145,28 +140,31 @@ async function main(): Promise<void> {
     console.log(`Size: ${sizeInKb ? sizeInKb.toFixed(2) : "unknown"} KB`);
     console.log(`Link: ${fileInfo.webViewLink}`);
 
-    // if (createShortLink) {
-    //   console.log(chalk.cyan("\nCreating short link..."));
-    //   try {
-    //     const shortUrl = await createTinyUrl(fileInfo.webViewLink);
-    //     console.log(chalk.green("Short link created!"));
-    //     console.log(`Short URL: ${shortUrl}`);
-    //   } catch (e: unknown) {
-    //     console.error(
-    //       chalk.red("Failed to create short link:"),
-    //       e instanceof Error ? e.message : String(e),
-    //     );
-    //   }
-    // }
+    if (createShortLink) {
+      console.log(chalk.cyan("\nCreating short link..."));
+      try {
+        const shortUrl = await createTinyUrl(fileInfo.webViewLink);
+        console.log(chalk.green("Short link created!"));
+        console.log(`Short URL: ${shortUrl}`);
+      } catch (e) {
+        console.error(
+          chalk.red("Failed to create short link:"),
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+    }
 
-    console.log(chalk.green.bold("\nFile uploaded to Google Drive\n"));
+    console.log(chalk.green.bold("\nDone! File is on Google Drive\n"));
   } catch (error: unknown) {
     console.error(
       chalk.red("\nError:"),
       error instanceof Error ? error.message : String(error),
     );
     process.exit(1);
+  } finally {
+    if (tempFilePath && (await fs.pathExists(tempFilePath))) {
+      await fs.remove(tempFilePath);
+    }
   }
 }
-
 main();

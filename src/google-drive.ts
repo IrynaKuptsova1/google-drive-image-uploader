@@ -2,8 +2,6 @@ import { google, drive_v3 } from "googleapis";
 import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
 import open from "open";
 import http from "http";
 import url from "url";
@@ -15,6 +13,19 @@ const CREDENTIALS_PATH = path.join(process.cwd(), "config", "credentials.json");
 const TOKEN_PATH = path.join(process.cwd(), "config", "token.json");
 
 type OAuth2Client = InstanceType<typeof google.auth.OAuth2>;
+
+function getMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeMap: Record<string, string> = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+  };
+  return mimeMap[ext] || "application/octet-stream";
+}
 
 async function loadCredentials(): Promise<any> {
   try {
@@ -59,7 +70,7 @@ async function getAccessToken(
           const code = queryParams.code;
 
           if (code) {
-            res.writeHead(200, { "Content-Type": "text/html" });
+            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
             res.end(
               "<h1>Authorization successful! You may close this window.</h1>",
             );
@@ -67,17 +78,27 @@ async function getAccessToken(
             const { tokens } = await oAuth2Client.getToken(code);
             oAuth2Client.setCredentials(tokens);
 
+            await fs.ensureDir(path.dirname(TOKEN_PATH));
             await fs.writeFile(TOKEN_PATH, JSON.stringify(tokens));
             server.close();
             resolve(oAuth2Client);
           }
         } catch (error) {
+          server.close();
           reject(error);
         }
       })
       .listen(3000, () => {
-        console.log(chalk.gray("Waiting for authorization..."));
+        console.log(
+          chalk.gray("Waiting for authorization on http://localhost:3000 ..."),
+        );
       });
+
+    server.on("error", (err) => {
+      reject(
+        new Error(`Server error (port 3000 might be in use): ${err.message}`),
+      );
+    });
   });
 }
 
@@ -138,7 +159,7 @@ export async function uploadToGoogleDrive(
   };
 
   const media = {
-    mimeType: "image/jpeg",
+    mimeType: getMimeType(filePath),
     body: fs.createReadStream(filePath),
   };
 
@@ -157,4 +178,16 @@ export async function uploadToGoogleDrive(
   });
 
   return response.data;
+}
+
+export async function createTinyUrl(fullUrl: string): Promise<string> {
+  const response = await fetch(
+    `https://tinyurl.com/api-create.php?url=${encodeURIComponent(fullUrl)}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`TinyURL API error: ${response.statusText}`);
+  }
+
+  return await response.text();
 }
