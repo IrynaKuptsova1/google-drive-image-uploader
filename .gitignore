@@ -1,5 +1,6 @@
 node_modules/
 dist/
+src/temp
 .env
 config/credentials.json
 config/token.json
